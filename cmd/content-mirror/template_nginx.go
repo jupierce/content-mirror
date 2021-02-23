@@ -56,6 +56,7 @@ http {
     proxy_set_header Connection "";
 
     {{ range $upstreams -}}
+  
     location /{{ .Name }}/ {
       proxy_pass {{ .URL }};
 
@@ -75,6 +76,34 @@ http {
       proxy_ssl_certificate_key {{ .KeyPath }};
       {{- end }}
       {{- end }}
+
+		# Do not cache repomd.xml. These need to be pulled from the
+		# mirrored server each time. When a yum repository is rebuilt, references in an old
+		# copy of repomd.xml will no longer resolve - resulting in 404s.
+		location ~ ^.*/(repodata/repomd\.xml) {
+		  proxy_pass {{ .URL }}$1;
+	
+		  # prevent caching for matched locations
+		  proxy_no_cache 1;
+		  proxy_cache_bypass 1;
+	
+		  proxy_set_header Host {{ index .Hosts 0 }};
+	
+		  {{- if .TLS }}
+		  proxy_ssl_session_reuse on;
+		  {{- if gt (len .CACertificatePath) 0 }}
+		  proxy_ssl_verify       on;
+		  proxy_ssl_trusted_certificate {{ .CACertificatePath }};
+		  {{- end }}
+		  {{- if gt (len .CertificatePath) 0 }}
+		  proxy_ssl_certificate     {{ .CertificatePath }};
+		  proxy_ssl_certificate_key {{ .KeyPath }};
+		  {{- end }}
+		  {{- end }}
+	
+		}
+
+
     }
     location = /{{ .Name }} {
       rewrite ^ /{{ .Name }}/ redirect;
